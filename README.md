@@ -1,154 +1,162 @@
-# Music Album Builder
+# Music Factory Patterns
 
-**Assignment #1 — Builder Pattern**
-**Product chosen:** `Album` — a music album that requires step-by-step
-assembly (title, artist, genre, track list, producer, explicit flag) and
-benefits from reusable configurations (e.g. a Deluxe Edition vs. a Radio
-Single Edition of the same underlying song).
+**Assignment #2 — Factory Method & Abstract Factory**
+**Domain chosen:** Music software — Part A builds audio-format players,
+Part B builds compatible sets of band instruments.
 
-## 1. Why Builder fits this product
+## Part A — Factory Method
 
-An `Album` has several optional and required parts (tracks, producer,
-genre, explicit flag) that are set incrementally. Using a single
-telescoping constructor for all of these would be unreadable and error
-prone. The Builder pattern lets the fields be set one at a time, through
-a fluent, self-documenting API, and only turns the in-progress state into
-a real `Album` once everything required is present.
+**Problem:** an app needs to play tracks stored in different audio
+formats (MP3, WAV), and it should be easy to add more formats later
+without touching the code that already plays tracks.
 
-## 2. Components
+| Role | Class |
+|---|---|
+| Product | `music.player.AudioPlayer` |
+| Concrete Product | `Mp3Player`, `WavPlayer` |
+| Creator | `AudioPlayerFactory` (abstract class, declares `createPlayer()` and a template method `playTrack()`) |
+| Concrete Creator | `Mp3PlayerFactory`, `WavPlayerFactory` |
 
-| Component | Class | Responsibility |
-|---|---|---|
-| Product | `music.model.Album` | The finished, immutable album. |
-| Builder | `music.builder.AlbumBuilder` | Interface declaring every construction step. |
-| ConcreteBuilder | `music.builder.StudioAlbumBuilder` | Implements the steps, validates state, produces the `Album`. |
-| Director | `music.builder.AlbumDirector` | Knows two reusable recipes: Radio Single Edition and Deluxe Edition. |
-| Client | `music.Main` | Uses the Director for a known recipe, and drives the builder directly for a bespoke album. |
+The client (`Main`) only calls `factory.playTrack(title)`. It never
+constructs `Mp3Player` or `WavPlayer` directly — adding a new format
+(say, FLAC) only means adding `FlacPlayer` + `FlacPlayerFactory`, with
+zero changes to existing classes (Open/Closed Principle).
 
-## 3. Clean Code principles applied
+## Part B — Abstract Factory
 
-### 3.1 Meaningful, intention-revealing names
-Methods and classes are named after what they do, not how: `AlbumBuilder`,
-`markExplicit()`, `requireAtLeastOneTrack()`. No `a`, `tmp`, `flag1`, etc.
+**Problem:** a virtual band needs a *consistent* set of instruments —
+an acoustic guitar should never end up paired with a synth keyboard by
+mistake. The system needs whole, compatible families of instruments,
+not just one instrument at a time.
 
-```java
-// Before (cryptic)
-public AlbumBuilder e() { this.x = true; return this; }
+| Role | Class |
+|---|---|
+| Abstract Product (Guitar family member) | `music.band.Guitar` |
+| Abstract Product (Keyboard family member) | `music.band.Keyboard` |
+| Concrete Products — Acoustic family | `AcousticGuitar`, `AcousticPiano` |
+| Concrete Products — Electric family | `ElectricGuitar`, `SynthKeyboard` |
+| Abstract Factory | `BandInstrumentFactory` |
+| Concrete Factories | `AcousticBandFactory`, `ElectricBandFactory` |
+| Client | `BandSetupClient` — depends only on `BandInstrumentFactory`, `Guitar`, `Keyboard`; never references a concrete class |
 
-// After (intention-revealing)
-public AlbumBuilder markExplicit() { this.explicit = true; return this; }
-```
+Because `BandSetupClient` never names a concrete product, swapping
+`new AcousticBandFactory()` for `new ElectricBandFactory()` changes the
+*entire* instrument set consistently, with no risk of mixing families.
 
-### 3.2 Small methods that do one thing
-`validateBeforeBuild()` in `StudioAlbumBuilder` does not itself check
-conditions — it delegates each check to a single-purpose method
-(`requireTitle`, `requireArtist`, `requireValidReleaseYear`,
-`requireAtLeastOneTrack`), so each method is a few lines and easy to name.
+## How Part A and Part B relate
 
-```java
-// Before (one big method mixing four checks)
-private void validateBeforeBuild() {
-    if (title == null || title.isBlank()) throw new IllegalStateException("title required");
-    if (artist == null || artist.isBlank()) throw new IllegalStateException("artist required");
-    if (releaseYear < 1900) throw new IllegalStateException("bad year");
-    if (trackTitles.size() < 1) throw new IllegalStateException("need a track");
-}
+Factory Method decides **which single product** to create (one axis of
+variation: file format). Abstract Factory decides **which whole family**
+of related products to create (one axis of variation: acoustic vs.
+electric), guaranteeing every product it returns belongs to the same
+family. Part B could be built *from* several Factory Methods internally
+(each `createGuitar()` / `createKeyboard()` is itself a small factory
+method) — this is the standard relationship between the two patterns.
 
-// After (delegates to single-purpose methods, see StudioAlbumBuilder.java)
-private void validateBeforeBuild() {
-    requireTitle();
-    requireArtist();
-    requireValidReleaseYear();
-    requireAtLeastOneTrack();
-}
-```
+## Clean Code principles applied
 
-### 3.3 One level of abstraction per function
-`Album.toString()` stays at a high level (header + track list) instead of
-mixing string-formatting details with the overall structure; the low-level
-formatting lives in `formatHeader()` / `formatTrackList()` /
-`formatTrackLine()`.
-
-```java
-// Before (mixes "what" and "how" in one function)
-public String toString() {
-    String s = title + " by " + artist + "\n";
-    for (int i = 0; i < trackTitles.size(); i++) {
-        s += "  " + (i + 1) + ". " + trackTitles.get(i) + "\n";
-    }
-    return s;
-}
-
-// After (each helper stays at one level of detail; see Album.java)
-public String toString() {
-    return formatHeader() + formatTrackList();
-}
-```
-
-### 3.4 No magic numbers or strings
-Constants such as `MIN_RELEASE_YEAR`, `MIN_TRACK_COUNT`, `DEFAULT_GENRE`
-and `DEFAULT_PRODUCER` replace inline literals, so their meaning is named
-once and reused.
+### 1. Meaningful, intention-revealing names
+Classes and methods say exactly what they do: `AudioPlayerFactory`,
+`playTrack()`, `BandSetupClient`, `rehearse()`. No abbreviations like
+`aFact`, `bsc`, `ctx`.
 
 ```java
 // Before
-if (releaseYear < 1900) { throw new IllegalStateException("Release year must be 1900 or later."); }
+AudioPlayerFactory f = new Mp3PlayerFactory();
+f.pt("Song");
 
 // After
-private static final int MIN_RELEASE_YEAR = 1900;
-...
-if (releaseYear < MIN_RELEASE_YEAR) {
-    throw new IllegalStateException("Release year must be " + MIN_RELEASE_YEAR + " or later.");
-}
+AudioPlayerFactory mp3Factory = new Mp3PlayerFactory();
+mp3Factory.playTrack("Neon Skyline (Deluxe Edition)");
 ```
 
-### 3.5 Validated construction / fail fast
-`build()` never returns a half-formed `Album`. It calls
-`validateBeforeBuild()` first and throws a clear `IllegalStateException`
-naming exactly what is missing, instead of producing a broken object or
-returning a null/error code.
+### 2. Small methods, each doing one thing
+`BandSetupClient`'s constructor does not itself decide what "valid"
+means — it delegates to `requireFactory()`. `AudioPlayerFactory` splits
+validation (`requireNonBlankTitle`) from the actual playback template
+(`playTrack`), so each method is readable at a single level of detail.
 
 ```java
-@Override
-public Album build() {
-    validateBeforeBuild();
-    return new Album(title, artist, genre, releaseYear, trackTitles, producer, explicit);
+// Before (one method, two responsibilities)
+public BandSetupClient(BandInstrumentFactory factory) {
+    if (factory == null) throw new IllegalArgumentException("factory required");
+    this.guitar = factory.createGuitar();
+    this.keyboard = factory.createKeyboard();
+}
+
+// After (validation extracted, see BandSetupClient.java)
+public BandSetupClient(BandInstrumentFactory factory) {
+    requireFactory(factory);
+    this.guitar = factory.createGuitar();
+    this.keyboard = factory.createKeyboard();
 }
 ```
 
-### 3.6 Avoiding long parameter lists (bonus)
-Instead of one constructor taking seven positional arguments (easy to
-mis-order), each field is set through a named, chainable method — the
-classic motivation for Builder from a Clean Code argument-discipline
-standpoint.
+### 3. Consistent formatting and small, focused classes
+Every concrete product class (`AcousticGuitar`, `ElectricGuitar`,
+`Mp3Player`, `WavPlayer`, ...) has exactly one responsibility and one
+public method, following the same shape throughout the codebase. No
+class mixes creation logic with playback logic, or product logic with
+factory-selection logic.
 
-## 4. How to run
+### 4. Validated construction
+Both `AudioPlayerFactory.playTrack()` and `BandSetupClient`'s
+constructor fail fast with a clear `IllegalArgumentException` message
+instead of silently producing a broken state (e.g., a client with a
+`null` guitar).
+
+```java
+private void requireNonBlankTitle(String trackTitle) {
+    if (trackTitle == null || trackTitle.isBlank()) {
+        throw new IllegalArgumentException("Track title must not be blank.");
+    }
+}
+```
+
+### 5. No magic numbers or strings
+Sample rates and gain levels are named constants
+(`DEFAULT_SAMPLE_RATE_HZ`, `DEFAULT_GAIN_LEVEL`) instead of bare
+literals scattered through `play()`/`strum()` methods.
+
+```java
+// Before
+System.out.println("Playing at 44100 Hz: " + trackTitle);
+
+// After
+private static final int DEFAULT_SAMPLE_RATE_HZ = 44_100;
+...
+System.out.printf("Decoding MP3 stream at %d Hz and playing: %s%n",
+        DEFAULT_SAMPLE_RATE_HZ, trackTitle);
+```
+
+### 6. Open/Closed Principle (bonus, ties Part A and B together)
+Adding a new audio format or a new instrument family never requires
+editing an existing class — only adding new ones (`FlacPlayer` +
+`FlacPlayerFactory`, or `JazzBandFactory` + its products).
+
+## How to run
 
 ```bash
 javac -d out $(find src -name "*.java")
 java -cp out music.Main
 ```
 
-## 5. Sample output
+## Sample output
 
 ```
-Neon Skyline (Deluxe Edition) by Aria Waves (2024, Pop) - Producer: M. Torres
-  1. Intro
-  2. Neon Skyline
-  3. Neon Skyline (Acoustic Version)
-  4. Bonus Track
+--- Part A: Factory Method ---
+Decoding MP3 stream at 44100 Hz and playing: Neon Skyline (Deluxe Edition)
+Reading raw PCM data at 48000 Hz and playing: Midnight Static
 
-Midnight Static by The Faraday Cage (2023, Alt Rock) - Producer: J. Kessler [Explicit]
-  1. Wavelength
-  2. Copper Wire
-  3. Silent Circuit
-
-Validation works as intended -> Artist name is required before calling build().
+--- Part B: Abstract Factory ---
+Acoustic guitar: warm, resonant strum from the wooden body.
+Acoustic piano: hammer strikes the string directly.
+Electric guitar: pickups send signal to the amp at gain 7.
+Synth keyboard: oscillator generates a waveform electronically.
 ```
 
-## 6. Commit history plan
+## Commit history plan
 
-1. `Add Album product and AlbumBuilder interface`
-2. `Implement StudioAlbumBuilder with validation`
-3. `Add AlbumDirector and Main client demo`
-4. `Add README with Clean Code justification`
+1. `Add AudioPlayer product hierarchy and Mp3/Wav factories (Part A)`
+2. `Add band instrument family (Guitar/Keyboard) and abstract factories (Part B)`
+3. `Add BandSetupClient, Main driver, and README with Clean Code justification`

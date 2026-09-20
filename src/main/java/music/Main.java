@@ -1,51 +1,38 @@
 package music;
 
-import music.builder.AlbumBuilder;
-import music.builder.AlbumDirector;
-import music.builder.StudioAlbumBuilder;
-import music.model.Album;
+import music.band.AcousticBandFactory;
+import music.band.BandInstrumentFactory;
+import music.band.BandSetupClient;
+import music.band.ElectricBandFactory;
+import music.player.AudioPlayerFactory;
+import music.player.Mp3PlayerFactory;
+import music.player.WavPlayerFactory;
 
-/**
- * Client of the Builder pattern.
- * Shows two ways to obtain a finished Album: through a Director for a
- * known, reusable configuration, and by driving the builder directly
- * for a bespoke one-off release.
- */
 public class Main {
 
     public static void main(String[] args) {
-        System.out.println(buildDeluxeReleaseWithDirector());
-        System.out.println(buildBespokeReleaseManually());
-        System.out.println(demonstrateValidationFailure());
+        demonstrateFactoryMethod();
+        System.out.println();
+        demonstrateAbstractFactory();
     }
 
-    private static Album buildDeluxeReleaseWithDirector() {
-        AlbumDirector director = new AlbumDirector();
-        AlbumBuilder builder = new StudioAlbumBuilder();
-        director.constructDeluxeEdition(builder, "Neon Skyline", "Aria Waves", 2024, "M. Torres");
-        return builder.build();
+    private static void demonstrateFactoryMethod() {
+        System.out.println("--- Part A: Factory Method ---");
+        AudioPlayerFactory mp3Factory = new Mp3PlayerFactory();
+        mp3Factory.playTrack("Neon Skyline (Deluxe Edition)");
+
+        AudioPlayerFactory wavFactory = new WavPlayerFactory();
+        wavFactory.playTrack("Midnight Static");
     }
 
-    private static Album buildBespokeReleaseManually() {
-        return new StudioAlbumBuilder()
-                .title("Midnight Static")
-                .artist("The Faraday Cage")
-                .genre("Alt Rock")
-                .releaseYear(2023)
-                .producer("J. Kessler")
-                .addTrack("Wavelength")
-                .addTrack("Copper Wire")
-                .addTrack("Silent Circuit")
-                .markExplicit()
-                .build();
-    }
+    private static void demonstrateAbstractFactory() {
+        System.out.println("--- Part B: Abstract Factory ---");
+        BandInstrumentFactory acousticFactory = new AcousticBandFactory();
+        BandSetupClient acousticBand = new BandSetupClient(acousticFactory);
+        acousticBand.rehearse();
 
-    private static String demonstrateValidationFailure() {
-        try {
-            new StudioAlbumBuilder().title("Untitled").build();
-            return "Validation did not trigger as expected.";
-        } catch (IllegalStateException expected) {
-            return "Validation works as intended -> " + expected.getMessage();
-        }
+        BandInstrumentFactory electricFactory = new ElectricBandFactory();
+        BandSetupClient electricBand = new BandSetupClient(electricFactory);
+        electricBand.rehearse();
     }
 }
